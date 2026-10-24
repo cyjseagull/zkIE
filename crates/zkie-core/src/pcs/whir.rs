@@ -7,6 +7,12 @@
 //! matmul verifier needs for the two sum-check evaluations it would otherwise
 //! recompute in `O(k)`.
 
+// Loop bodies in this module index several buffers from one loop counter
+// (bit-indexing, `pos * h + d` layouts, interleaved field arithmetic). The
+// iterator rewrites this lint suggests read worse here and, in the FFT/logUp
+// kernels, would reorder field operations; the indexed form is deliberate.
+#![allow(clippy::needless_range_loop)]
+
 /// Global count of FRI opening proofs across all Whir instances (batch Whirs are
 /// transient, so per-instance stats do not accumulate). Used for telemetry.
 static GLOBAL_OPEN_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -29,7 +35,9 @@ use p3_sumcheck::layout::{Layout as _, SuffixProver, Table};
 use p3_sumcheck::{OpeningBatch, PointSchedule, PrescribedPointPcs, TableShape, TableSpec};
 use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
 use p3_whir::fiat_shamir::domain_separator::DomainSeparator;
-use p3_whir::parameters::{FoldingFactor, ProtocolParameters, SecurityAssumption, WhirConfig, WhirConfigError};
+use p3_whir::parameters::{
+    FoldingFactor, ProtocolParameters, SecurityAssumption, WhirConfig, WhirConfigError,
+};
 use p3_whir::pcs::prover::WhirProver;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
@@ -802,6 +810,25 @@ fn to_ef_point(point: &[Goldilocks]) -> Point<EF> {
     Point::new(point.iter().rev().map(|&c| EF::from(c)).collect())
 }
 
+impl serde::Serialize for Whir {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeTuple;
+        let mut t = serializer.serialize_tuple(3)?;
+        t.serialize_element(&self.num_variables)?;
+        t.serialize_element(&self.security_level)?;
+        t.serialize_element(&self.pow_bits)?;
+        t.end()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Whir {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let (num_variables, security_level, pow_bits) =
+            <(usize, usize, usize)>::deserialize(deserializer)?;
+        Ok(Whir::with_params(num_variables, security_level, pow_bits))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -904,24 +931,3 @@ mod tests {
         assert_eq!(verified.len(), num_tables);
     }
 }
-
-
-impl serde::Serialize for Whir {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeTuple;
-        let mut t = serializer.serialize_tuple(3)?;
-        t.serialize_element(&self.num_variables)?;
-        t.serialize_element(&self.security_level)?;
-        t.serialize_element(&self.pow_bits)?;
-        t.end()
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for Whir {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let (num_variables, security_level, pow_bits) =
-            <(usize, usize, usize)>::deserialize(deserializer)?;
-        Ok(Whir::with_params(num_variables, security_level, pow_bits))
-    }
-}
-
