@@ -863,7 +863,15 @@ mod tests {
         let mut rng = XorShift64::new(0x5eed);
         let d = 6;
         let evals: Vec<Goldilocks> = (0..(1 << d)).map(|_| rng.field()).collect();
-        let whir = Whir::new(d);
+        // Fast instance on purpose. `Whir::new` is the production one (90-bit
+        // security, `pow_bits = 32`), and the prover grinds ~2^32 transcript
+        // hashes per opening for that PoW budget — minutes per test, which is
+        // what used to make `cargo test -p zkie-core` look hung. Nothing here
+        // exercises PoW or the security level: the test asserts that the
+        // prescribed-point open/verify roundtrip returns the MLE evaluation.
+        // The production parameters themselves are covered by
+        // `new_and_new_testing_expose_their_parameters` below.
+        let whir = Whir::new_testing(d);
 
         let point: Vec<Goldilocks> = (0..d).map(|_| rng.field()).collect();
         let (commitment, prover_data, protocol) = whir.commit(&evals);
@@ -872,6 +880,20 @@ mod tests {
 
         assert_eq!(opened, verified);
         assert_eq!(verified, mle::eval(&evals, &point));
+    }
+
+    /// The two constructors differ only in parameters; assert the values here
+    /// instead of paying for a 2^32-hash grind in every other test.
+    #[test]
+    fn new_and_new_testing_expose_their_parameters() {
+        let production = Whir::new(8);
+        assert_eq!(production.security_level(), 90);
+        assert_eq!(production.pow_bits(), 32);
+        assert_eq!(production.num_variables(), 8);
+
+        let testing = Whir::new_testing(8);
+        assert_eq!(testing.security_level(), 32);
+        assert_eq!(testing.pow_bits(), 10);
     }
 
     #[test]
