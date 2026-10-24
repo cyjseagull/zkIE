@@ -50,11 +50,7 @@ fn main() {
     let mut rng = XorShift64::new(0xBEEF);
 
     let t0 = std::time::Instant::now();
-    let cached = commit_model_weights(
-        &store,
-        &ops,
-        "/data/jimmyshi/zkie-cache/gemma3-model-batches-v2",
-    );
+    let cached = commit_model_weights(&store, &ops, "target/zkie-cache/gemma3-model-batches-v2");
     let commit_t = t0.elapsed();
 
     let t1 = std::time::Instant::now();

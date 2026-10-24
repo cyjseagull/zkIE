@@ -55,7 +55,10 @@ fn main() {
     let cached = commit_model_weights(
         &store,
         &ops,
-        "/data/jimmyshi/zkie-cache/gpt2-model-batches-v2",
+        // Relative to the repo root (gitignored). The old value was an absolute
+        // /data/jimmyshi/... path, which does not exist elsewhere and cannot be
+        // created on macOS because / is a read-only volume.
+        "target/zkie-cache/gpt2-model-batches-v2",
     );
     let commit_t = t0.elapsed();
 
